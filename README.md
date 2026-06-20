@@ -11,4 +11,4 @@ Hosted on GitHub Pages for the CT-RAM Clinical Trial Intake Chatbot.
 
 ## Update the prompt
 
-Replace `krishnanvenkatesh` in the prompt with your actual GitHub username.
+Replace `your git hub name` in the prompt with your actual GitHub username.
