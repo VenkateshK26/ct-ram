@@ -548,23 +548,50 @@
   window.onload = function() {
     const data = {};
 
-    // Parse CTRAM_DATA from URL hash
-    // Format: #trial_alias=X | veeva_trial_id=Y | ...
-    try {
-      const hash = decodeURIComponent(window.location.hash.slice(1));
-      if (hash.includes("|") || hash.includes("=")) {
-        hash.split("|").forEach(pair => {
-          const eqIdx = pair.indexOf("=");
-          if (eqIdx === -1) return;
-          const k = pair.slice(0, eqIdx).trim();
-          const v = pair.slice(eqIdx + 1).trim();
-          if (k && v && v !== "None" && v !== "") {
-            const fieldId = CTRAM_KEY_MAP[k];
-            if (fieldId) data[fieldId] = v;
-          }
-        });
+    // Read from URL query params (?trial_alias=X&veeva_id=Y&...)
+    const params = new URLSearchParams(window.location.search);
+
+    // Map from URL param name → form field ID
+    const paramMap = {
+      "trial_alias":           "trial_alias",
+      "veeva_id":              "veeva_id",
+      "study_acronym":         "study_acronym",
+      "protocol_title":        "protocol_title",
+      "therapeutic_area":      "therapeutic_area",
+      "study_phase":           "study_phase",
+      "ly_number":             "ly_number",
+      "trial_indication":      "trial_indication",
+      "outsourced":            "outsourced_trial",
+      "participants_trial":    "participants_trial",
+      "participants_treatment":"participants_treatment",
+      "number_of_sites":       "number_of_sites",
+      "master_protocol":       "master_protocol",
+      "wearables":             "wearables",
+      "third_party":           "third_party",
+      "ecoa":                  "ecoa",
+      "date_protocol_approval":"date_protocol_approval",
+      "date_package_ready":    "date_package_ready",
+      "date_first_patient":    "date_first_patient",
+      "date_last_entered":     "date_last_entered",
+      "date_last_visit":       "date_last_visit",
+      "date_db_lock":          "date_db_lock",
+      "cdr_name":              "cdr_name",
+      "cdr_email":             "cdr_email",
+      "ds_name":               "ds_name",
+      "ds_email":              "ds_email",
+      "cdtm_name":             "cdtm_name",
+      "cdtm_email":            "cdtm_email",
+      "crp_name":              "crp_name",
+      "veo_name":              "veo_name",
+      "countries":             "countries"
+    };
+
+    params.forEach((value, key) => {
+      const fieldId = paramMap[key];
+      if (fieldId && value && value !== "None") {
+        data[fieldId] = decodeURIComponent(value.replace(/\+/g, " "));
       }
-    } catch(e) {}
+    });
 
     // Fill all mapped fields
     let filled = 0;
