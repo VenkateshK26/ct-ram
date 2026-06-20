@@ -778,6 +778,82 @@
   }
 
   // ── Main submit ──────────────────────────────────────────────────────
+
+  // ── Submit to SharePoint List ────────────────────────────────────
+  async function submitToSharePoint() {
+    const SITE_URL = "https://collab.lilly.com/sites/CT-RAM";
+    const LIST_NAME = "ClinicalTrialIntake";
+    const endpoint = SITE_URL + "/_api/lists/getbytitle('" + LIST_NAME + "')/items";
+
+    const item = {
+      "__metadata": { "type": "SP.Data.ClinicalTrialIntakeListItem" },
+      "Title":                          val("trial_alias"),
+      "TrialAlias":                     val("trial_alias"),
+      "VeevaTrialID":                   val("veeva_id"),
+      "StudyAcronym":                   val("study_acronym") || "None",
+      "ProtocolTitle":                  val("protocol_title"),
+      "TherapeuticArea":                val("therapeutic_area"),
+      "StudyPhase":                     val("study_phase"),
+      "LYNumber":                       val("ly_number"),
+      "TrialIndication":                val("trial_indication"),
+      "OutsourcedTrial":                val("outsourced_trial"),
+      "ParticipantsEnteringTrial":      val("participants_trial"),
+      "ParticipantsEnteringTreatment":  val("participants_treatment"),
+      "NumberOfSites":                  val("number_of_sites"),
+      "MasterProtocolType":             val("master_protocol"),
+      "UsesWearables":                  val("wearables"),
+      "ThirdPartyBranding":             val("third_party"),
+      "ECOAPlanned":                    val("ecoa"),
+      "ForecastProtocolApproval":       val("date_protocol_approval"),
+      "ForecastTrialPackageReady":      val("date_package_ready"),
+      "ForecastFirstPatientVisit":      val("date_first_patient"),
+      "ForecastLastPatientEntered":     val("date_last_entered") || "Unknown",
+      "ForecastLastPatientVisit":       val("date_last_visit"),
+      "ForecastFinalDBLock":            val("date_db_lock"),
+      "CDRName":                        val("cdr_name"),
+      "CDREmail":                       val("cdr_email"),
+      "DataStrategistName":             val("ds_name"),
+      "DataStrategistEmail":            val("ds_email"),
+      "CDTMName":                       val("cdtm_name"),
+      "CDTMEmail":                      val("cdtm_email"),
+      "CRPCRSName":                     val("crp_name"),
+      "VEOScientistName":               val("veo_name"),
+      "CountriesLanguages":             val("countries"),
+      "AdditionalFiles":                selectedFiles.length > 0 ? selectedFiles.map(function(f){return f.name;}).join(", ") : "None",
+      "IntakeStatus":                   "Submitted"
+    };
+
+    // Get SharePoint request digest
+    const digestRes = await fetch(SITE_URL + "/_api/contextinfo", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Accept": "application/json;odata=verbose" }
+    });
+    if (!digestRes.ok) throw new Error("SharePoint auth failed: " + digestRes.status + ". Make sure you are logged into collab.lilly.com.");
+    const digestData = await digestRes.json();
+    const digest = digestData.d.GetContextWebInformation.FormDigestValue;
+
+    // Create list item
+    const res = await fetch(endpoint, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Accept": "application/json;odata=verbose",
+        "Content-Type": "application/json;odata=verbose",
+        "X-RequestDigest": digest
+      },
+      body: JSON.stringify(item)
+    });
+
+    if (res.status === 401 || res.status === 403) throw new Error("SharePoint auth failed. Log into collab.lilly.com first.");
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error("SharePoint error " + res.status + ": " + errText.slice(0, 300));
+    }
+    const result = await res.json();
+    return result.d.ID;
+  }
+
   async function submitAll() {
     if (!validate()) return;
 
@@ -802,7 +878,16 @@
     const excelUrl = URL.createObjectURL(excelBlob);
     const downloadBtn = '<a class="btn-download" href="' + excelUrl + '" download="' + excelFilename + '">⬇ Download Excel Report</a>';
 
-    // Step 2: Upload Excel — show download even if CORS blocks response
+    // Step 2: Submit to SharePoint list
+    showStatus("info", '<div class="progress-row"><div class="spinner"></div> Submitting intake record to SharePoint…</div>');
+    try {
+      const spItemId = await submitToSharePoint();
+      html += '<div class="result-item">✅ SharePoint record created — Item ID: ' + spItemId + ' (<a href="https://collab.lilly.com/sites/CT-RAM/Lists/ClinicalTrialIntake/AllItems.aspx" target="_blank" style="color:#1a7340">View list ↗</a>)</div>';
+    } catch(err) {
+      html += '<div class="result-item">⚠️ SharePoint: ' + err.message + '</div>';
+    }
+
+    // Step 3: Upload Excel — show download even if CORS blocks response
     showStatus("info", '<div class="progress-row"><div class="spinner"></div> Uploading Excel report to CT-RAM data store…</div>');
     try {
       const excelFileObj = new File([excelBlob], excelFilename, {
@@ -814,7 +899,7 @@
       html += '<div class="result-item">✅ ' + excelFilename + ' — submitted to data store</div>';
     }
 
-    // Step 3: Upload additional files
+    // Step 4: Upload additional files
     if (selectedFiles.length > 0) {
       showStatus("info", '<div class="progress-row"><div class="spinner"></div> Uploading ' + selectedFiles.length + ' additional file(s)…</div>');
       try {
@@ -829,7 +914,7 @@
       }
     }
 
-    // Step 4: Always show download button
+    // Step 5: Always show download button
     html += downloadBtn;
     showStatus("success", html);
     selectedFiles = [];
